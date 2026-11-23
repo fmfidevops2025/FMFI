@@ -1,0 +1,179 @@
+@using Microsoft.EntityFrameworkCore
+@using MyBlazorApp.DatabaseModel
+
+@rendermode InteractiveServer
+
+@inject IDbContextFactory<Whiyes5oContext> DbContextFactory
+@inject NavigationManager Navigation
+
+@page "/transaction/{id:int}"
+
+<PageTitle>Transaction Detail - @Id</PageTitle>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Transaction Detail</h1>
+    <button class="btn btn-secondary" @onclick="GoBack">
+        <i class="bi bi-arrow-left"></i> Back to Transactions
+    </button>
+</div>
+
+@if (Transaction == null)
+{
+    <div class="d-flex justify-content-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+    </div>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-receipt"></i> Transaction Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <dl class="row">
+                        <dt class="col-sm-3">Transaction ID:</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge bg-primary fs-6">@Transaction.Id</span>
+                        </dd>
+
+                        <dt class="col-sm-3">Transaction Type:</dt>
+                        <dd class="col-sm-9">
+                            <span class="badge bg-info fs-6">@Transaction.TransactionType?.Name</span>
+                        </dd>
+
+                        <dt class="col-sm-3">Amount:</dt>
+                        <dd class="col-sm-9">
+                            <span class="fs-4 fw-bold text-success">@Transaction.Amount.ToString("C")</span>
+                        </dd>
+
+                        <dt class="col-sm-3">Issue Date:</dt>
+                        <dd class="col-sm-9">
+                            <i class="bi bi-calendar3"></i> @Transaction.IssueDate.ToString("dddd, MMMM dd, yyyy 'at' HH:mm")
+                        </dd>
+
+                        <dt class="col-sm-3">Account Number:</dt>
+                        <dd class="col-sm-9">
+                            <code>@Transaction.AccountNumber</code>
+                        </dd>
+
+                        <dt class="col-sm-3">Bank Code:</dt>
+                        <dd class="col-sm-9">
+                            <code>@Transaction.BankCode</code>
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-person-circle"></i> User Information
+                    </h5>
+                </div>
+                <div class="card-body">
+                    @if (Transaction.User != null)
+                    {
+                        <dl class="row">
+                            <dt class="col-sm-4">Name:</dt>
+                            <dd class="col-sm-8">@Transaction.User.Name</dd>
+
+                            <dt class="col-sm-4">User ID:</dt>
+                            <dd class="col-sm-8">@Transaction.User.Id</dd>
+
+                            <dt class="col-sm-4">Salary:</dt>
+                            <dd class="col-sm-8">@Transaction.User.Salary.ToString("C")</dd>
+                        </dl>
+                    }
+                    else
+                    {
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i> User information not available
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="bi bi-info-circle"></i> Transaction Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <div class="border-end">
+                                <h6 class="text-muted">Type ID</h6>
+                                <span class="fs-5">@Transaction.TransactionTypeId</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <h6 class="text-muted">User ID</h6>
+                            <span class="fs-5">@Transaction.UserId</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (Transaction.TransactionType != null)
+    {
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-tag"></i> Transaction Type Details
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <strong>Type Name:</strong> @Transaction.TransactionType.Name
+                    </div>
+                    <div class="col-md-6">
+                        <strong>Type ID:</strong> @Transaction.TransactionType.Id
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private Transaction? Transaction { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTransaction();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadTransaction();
+    }
+
+    private async Task LoadTransaction()
+    {
+        await using var context = await DbContextFactory.CreateDbContextAsync();
+
+        Transaction = await context.Transactions
+            .Include(t => t.TransactionType)
+            .Include(t => t.User)
+            .FirstOrDefaultAsync(t => t.Id == Id);
+    }
+
+    private void GoBack()
+    {
+        Navigation.NavigateTo("/transactions");
+    }
+}

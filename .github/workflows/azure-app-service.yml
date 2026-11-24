@@ -1,0 +1,91 @@
+name: Build and deploy to Azure App Service
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: Azure environment to deploy
+        required: true
+        default: development
+        type: choice
+        options:
+          - development
+          - production
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: Restore
+        run: dotnet restore MyBlazorApp.sln
+      - name: Build
+        run: dotnet build MyBlazorApp.sln --configuration Release --no-restore
+      - name: Test
+        run: dotnet test MyBlazorApp.Tests/MyBlazorApp.Tests.csproj --configuration Release --no-build --no-restore
+      - name: Publish
+        run: dotnet publish MyBlazorApp.csproj --configuration Release --no-build --no-restore --output "${{ runner.temp }}/publish"
+      - name: Upload application
+        uses: actions/upload-artifact@v4
+        with:
+          name: webapp
+          path: ${{ runner.temp }}/publish/
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy:
+    name: Deploy to Azure
+    if: github.ref == 'refs/heads/dev' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || 'development' }}
+      url: ${{ steps.deploy.outputs.webapp-url }}
+    concurrency:
+      group: azure-${{ github.event_name == 'workflow_dispatch' && inputs.target_environment || 'development' }}
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Download application
+        uses: actions/download-artifact@v4
+        with:
+          name: webapp
+          path: publish
+      - name: Check deployment configuration
+        env:
+          AZURE_WEBAPP_NAME: ${{ vars.AZURE_WEBAPP_NAME }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+        run: |
+          for name in AZURE_WEBAPP_NAME AZURE_CLIENT_ID AZURE_TENANT_ID AZURE_SUBSCRIPTION_ID; do
+            if [ -z "${!name}" ]; then
+              echo "Missing $name in the selected GitHub environment" >&2
+              exit 1
+            fi
+          done
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Deploy application
+        id: deploy
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: publish

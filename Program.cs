@@ -1,5 +1,6 @@
 using MyBlazorApp.Components;
 using MyBlazorApp.DatabaseModel;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,7 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Services.AddDbContextFactory<Whiyes5oContext>();
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is required.");
+builder.Services.AddDbContextFactory<Whiyes5oContext>(options => options.UseMySQL(connectionString));
 
 var app = builder.Build();
 
